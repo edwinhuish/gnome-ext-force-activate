@@ -1,0 +1,15 @@
+{
+  "uuid": "force-activate",
+  "name": "Force Activate",
+  "description": "Brings windows that another application asked for to the foreground, instead of only raising a \"Window is ready\" notification.\n\nUnder Wayland, a window opened from another application without a valid xdg-activation token is refused focus by the compositor and merely marked as demanding attention. Applications that open links through xdg-open never attach that token, so the window ends up behind whatever you are looking at. This extension takes over the attention signal and activates the window directly at the compositor level, which bypasses focus stealing prevention.\n\nAn ignore list lets you keep specific applications from grabbing focus.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.force-activate",
+  "version-name": "1.0.0"
+}

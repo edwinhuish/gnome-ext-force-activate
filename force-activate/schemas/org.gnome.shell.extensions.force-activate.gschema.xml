@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GSettings schema for the Force Activate extension.
+
+  Note: the schema id is not the extension uuid ("force-activate") because
+  schema ids must be namespaced under "org.gnome.shell.extensions", which is
+  why the extension declares "settings-schema" explicitly in metadata.json.
+-->
+<schemalist>
+
+  <schema id="org.gnome.shell.extensions.force-activate"
+          path="/org/gnome/shell/extensions/force-activate/">
+
+    <key name="suppress-notification" type="b">
+      <default>true</default>
+      <summary>Skip the “Window is ready” notification</summary>
+      <description>
+        When enabled, the extension blocks GNOME Shell's own attention handler
+        so that the "Window is ready" notification banner is not shown, and the
+        window is focused directly instead.
+
+        When disabled, GNOME Shell keeps showing the notification and the
+        extension only adds the focus request on top of it.
+      </description>
+    </key>
+
+    <key name="ignore-list" type="as">
+      <default>[]</default>
+      <summary>WM classes that are never force-activated</summary>
+      <description>
+        List of WM class strings (as reported by Meta.Window.get_wm_class()).
+        Windows matching an entry are left to GNOME Shell and will not be
+        brought to the foreground by this extension.
+      </description>
+    </key>
+
+  </schema>
+
+</schemalist>

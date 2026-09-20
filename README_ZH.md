@@ -42,7 +42,7 @@ GNOME Shell 是 compositor 的可信客户端，它的激活请求不受焦点�
 |---|---|
 | GNOME Shell | 45 或更新版本 |
 | 会话类型 | Wayland（X11 会话不需要此扩展） |
-| 构建工具 | `make`、`glib-compile-schemas`（来自 `libglib2.0-bin`）、`gnome-extensions`（随 GNOME Shell 提供）、`python3` |
+| 构建工具 | `glib-compile-schemas`（来自 `libglib2.0-bin`）、`gnome-extensions`（随 GNOME Shell 提供）、`node` + `pnpm`、`python3` |
 
 ## 安装
 
@@ -51,27 +51,27 @@ GNOME Shell 是 compositor 的可信客户端，它的激活请求不受焦点�
 ```bash
 git clone <your-remote> force-activate
 cd force-activate
-make install          # 复制到 ~/.local/share/gnome-shell/extensions/
+pnpm install:ext    # 复制到 ~/.local/share/gnome-shell/extensions/
 ```
 
 Wayland 下新安装的扩展只有在**重新登录**后才会被加载：
 
 ```bash
 # 注销并重新登录，然后：
-make enable
+pnpm enable
 ```
 
 ### 从发布包安装
 
 ```bash
-make zip
-gnome-extensions install --force build/force-activate.shell-extension.zip
+pnpm build
+gnome-extensions install --force build/force-activate@edwinhuish.github.io.shell-extension.zip
 ```
 
 ## 设置
 
 在「扩展」中打开首选项（或执行
-`gnome-extensions prefs force-activate`）：
+`gnome-extensions prefs force-activate@edwinhuish.github.io`）：
 
 | 设置项 | 默认值 | 说明 |
 |---|---|---|
@@ -81,7 +81,7 @@ gnome-extensions install --force build/force-activate.shell-extension.zip
 设置保存在 `org.gnome.shell.extensions.force-activate`，也可以用命令行修改：
 
 ```bash
-gsettings --schemadir force-activate/schemas \
+gsettings --schemadir schemas \
   set org.gnome.shell.extensions.force-activate ignore-list "['org.telegram.desktop']"
 ```
 
@@ -109,15 +109,15 @@ journalctl -f -o cat /usr/bin/gnome-shell
 ## 开发
 
 ```bash
-make validate   # 编译 GSettings schema，校验 JSON 元数据
-make check      # ./release.sh --no-build：格式检查
-make install    # 安装到用户扩展目录
-make enable     # 启用扩展
-make disable    # 禁用扩展
-make zip        # 打包用于 extensions.gnome.org 的压缩包
-make release    # 检查 + 改版本号 + 打包 + 校验（VERSION=x.y.z）
-make uninstall  # 删除已安装的副本
-make clean      # 清理构建产物
+pnpm lint          # 编译并校验 GSettings schema、校验 metadata.json
+pnpm test          # 运行 extensions.gnome.org 官方检查工具 shexli
+pnpm install:ext   # 构建并安装到用户扩展目录
+pnpm enable        # 启用扩展
+pnpm disable       # 禁用扩展
+pnpm build         # 打包用于 extensions.gnome.org 的压缩包
+pnpm release       # 先检查，再改 version-name 与 package.json 版本 + 打包 + 打 tag（1.0.0 / minor / major）
+pnpm uninstall:ext # 删除已安装的副本
+pnpm clean         # 清理构建产物
 ```
 
 目录结构：
@@ -129,9 +129,13 @@ make clean      # 清理构建产物
 ├── prefs.js
 ├── schemas/
 │   └── org.gnome.shell.extensions.force-activate.gschema.xml
-├── Makefile
-├── install.sh
-├── release.sh
+├── scripts/
+│   ├── lint.mjs
+│   ├── test.mjs
+│   ├── build.mjs
+│   └── release.mjs
+├── package.json
+├── pnpm-lock.yaml
 ├── README.md
 └── README_ZH.md
 ```
@@ -141,30 +145,40 @@ make clean      # 清理构建产物
 
 ## 发布
 
-`release.sh` 会按 extensions.gnome.org 的格式要求做检查（uuid、metadata 字段、
-schema id 与路径、禁止的 import、压缩包结构），然后打包并检查产物：
+离线检查（编译并校验 GSettings schema、校验 `metadata.json`）在 `scripts/lint.mjs`
+（通过 `pnpm lint` 运行）中；extensions.gnome.org 官方检查工具 `shexli` 在
+`scripts/test.mjs`（通过 `pnpm test` 运行）中。发布辅助脚本是 `scripts/release.mjs`
+（参考 BetterTrayIcons 的写法）：它会修改 `metadata.json` 里的 `version-name`
+和 `package.json` 里的 `version`，用 `gnome-extensions pack`
+打包，提交改动并打上 tag。`pnpm release` 会先跑 `pnpm lint` 和 `pnpm test`，所以只有在
+`shexli` 和内置检查通过后才打 tag。
 
 ```bash
-./release.sh --no-build    # 只做检查，可在 CI 中安全运行
-./release.sh               # 用当前 version-name 打包
-./release.sh 1.1.0 --tag   # 写入 version-name、打包并打 tag v1.1.0
+pnpm lint                            # schema + metadata
+pnpm test                            # shexli（extensions.gnome.org）
+node scripts/release.mjs            # 用当前版本打包
+node scripts/release.mjs 1.1.0      # 改版本号、打包、提交并打 tag v1.1.0
+node scripts/release.mjs --dry-run 1.1.0   # 只预览，不做任何改动
+pnpm release 1.1.0                  # 先检查，再改版本号/打包/提交/打 tag
+pnpm release --push 1.1.0           # 同上，并推送 commit 与 tag
 ```
 
-脚本会生成 `build/force-activate.shell-extension.zip` 和对应的 `.sha256`
-校验和，并确认压缩包根目录下包含 `metadata.json`、`extension.js`、`prefs.js`
-和 schema XML，同时不含不该发布的文件（README、Makefile、编译后的 schema、
-翻译文件、构建目录等）。
+给定版本时总会打上 `v<x.y.z>` tag；离线时可传入 `SKIP_CHECK=1`
+跳过需要联网的 shexli。
 
 打包使用 `gnome-extensions pack`：包里只有 `schemas/*.gschema.xml`，没有
 `gschemas.compiled`——GNOME 44+ 的安装器和 extensions.gnome.org 会自行编译，
-而陈旧的编译产物会遮蔽之后对 XML 的修改。上传地址：
-<https://extensions.gnome.org/upload/>。
+而陈旧的编译产物会遮蔽之后对 XML 的修改。执行 `pnpm release`（或
+`node scripts/release.mjs <版本>`）后，手动到
+<https://extensions.gnome.org/upload/> 上传压缩包，再用 `git push --follow-tags`
+推送 tag。
 
-首次上传前还有两件事要定：`metadata.json` 里还没有指向源码仓库的 `url`；uuid
-用的是不带命名空间的 `force-activate` —— extensions.gnome.org 接受这种形式
-（它只拒绝非法字符集和 `gnome.org` 命名空间），但其审核规范建议使用
-`extension-id@namespace`，例如 `force-activate@your-name.github.io`。这两点
-`./release.sh` 都会给出警告。
+首次上传前：`uuid` 已带命名空间（`force-activate@edwinhuish.github.io`），符合
+extensions.gnome.org 的要求。请让它和你在 extensions.gnome.org 上扩展对应的
+uuid 保持一致，并可选择加上指向源码仓库的 `url` 字段。
+
+`.github/workflows/ci.yml` 会在每个 PR 和推送到 `main` 时运行 `pnpm lint` 与
+`pnpm test`（即 `shexli` 和内置检查），趁早发现问题。
 
 ## 限制
 

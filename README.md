@@ -51,7 +51,7 @@ never appears.
 |---|---|
 | GNOME Shell | 45 or newer |
 | Session type | Wayland (X11 sessions do not need this) |
-| Build tools | `make`, `glib-compile-schemas` (from `libglib2.0-bin`), `gnome-extensions` (shipped with GNOME Shell), `python3` |
+| Build tools | `glib-compile-schemas` (from `libglib2.0-bin`), `gnome-extensions` (shipped with GNOME Shell), `node` + `pnpm`, `python3` |
 
 ## Install
 
@@ -60,27 +60,27 @@ never appears.
 ```bash
 git clone <your-remote> force-activate
 cd force-activate
-make install          # copies to ~/.local/share/gnome-shell/extensions/
+pnpm install:ext    # copies to ~/.local/share/gnome-shell/extensions/
 ```
 
 On Wayland a newly installed extension is only picked up after a **new login**:
 
 ```bash
 # log out and back in, then:
-make enable
+pnpm enable
 ```
 
 ### From a release bundle
 
 ```bash
-make zip
-gnome-extensions install --force build/force-activate.shell-extension.zip
+pnpm build
+gnome-extensions install --force build/force-activate@edwinhuish.github.io.shell-extension.zip
 ```
 
 ## Settings
 
 Open the preferences from Extensions (or `gnome-extensions prefs
-force-activate`):
+force-activate@edwinhuish.github.io`):
 
 | Setting | Default | Description |
 |---|---|---|
@@ -91,7 +91,7 @@ Settings live in `org.gnome.shell.extensions.force-activate` and can also be
 changed from the command line:
 
 ```bash
-gsettings --schemadir force-activate/schemas \
+gsettings --schemadir schemas \
   set org.gnome.shell.extensions.force-activate ignore-list "['org.telegram.desktop']"
 ```
 
@@ -121,15 +121,15 @@ The extension matches on WM class; a window without one is always activated.
 ## Development
 
 ```bash
-make validate   # compile the GSettings schema, validate the JSON metadata
-make check      # ./release.sh --no-build: check the extension format
-make install    # install into the user extension directory
-make enable     # enable the extension
-make disable    # disable it
-make zip        # build a bundle for extensions.gnome.org
-make release    # check, bump, build and verify a bundle (VERSION=x.y.z)
-make uninstall  # remove the installed copy
-make clean      # drop build artefacts
+pnpm lint          # compile + validate GSettings schema, validate metadata.json
+pnpm test          # run the official extensions.gnome.org linter (shexli)
+pnpm install:ext   # build and install into the user extension directory
+pnpm enable        # enable the extension
+pnpm disable       # disable it
+pnpm build         # build a bundle for extensions.gnome.org
+pnpm release       # lint, bump version-name + package.json version, pack, commit and tag (1.0.0 / minor / major)
+pnpm uninstall:ext # remove the installed copy
+pnpm clean         # drop build artefacts
 ```
 
 Layout:
@@ -141,9 +141,13 @@ Layout:
 ├── prefs.js
 ├── schemas/
 │   └── org.gnome.shell.extensions.force-activate.gschema.xml
-├── Makefile
-├── install.sh
-├── release.sh
+├── scripts/
+│   ├── lint.mjs
+│   ├── test.mjs
+│   ├── build.mjs
+│   └── release.mjs
+├── package.json
+├── pnpm-lock.yaml
 ├── README.md
 └── README_ZH.md
 ```
@@ -154,32 +158,44 @@ cannot be the extension uuid.
 
 ## Releasing
 
-`release.sh` checks the tree against the extensions.gnome.org format rules —
-uuid and metadata keys, schema id and path, forbidden imports, bundle layout —
-and then builds and inspects the bundle:
+The offline checks (compile/validate the GSettings schema, validate
+`metadata.json`) live in `scripts/lint.mjs` (run via `pnpm lint`), while the
+official extensions.gnome.org linter `shexli` is in `scripts/test.mjs` (run via
+`pnpm test`). The release helper is `scripts/release.mjs` (modeled on
+BetterTrayIcons): it bumps `version-name` in `metadata.json` and `version` in
+`package.json`, builds the bundle with `gnome-extensions pack`, commits the
+bump and tags it. `pnpm release` runs `pnpm lint` and `pnpm test` first, so a
+release is only cut when the `shexli` lint and the bundled checks pass.
 
 ```bash
-./release.sh --no-build    # checks only, safe to run in CI
-./release.sh               # bundle for the current version-name
-./release.sh 1.1.0 --tag   # write version-name, build, tag v1.1.0
+pnpm lint                            # schema + metadata
+pnpm test                            # shexli (extensions.gnome.org)
+node scripts/release.mjs            # build the bundle for the current version
+node scripts/release.mjs 1.1.0      # bump, build, commit and tag v1.1.0
+node scripts/release.mjs --dry-run 1.1.0   # show what would happen, change nothing
+pnpm release 1.1.0                  # lint + shexli first, then bump/pack/commit/tag
+pnpm release --push 1.1.0           # same, and pushes the commit and tag
 ```
 
-It writes `build/force-activate.shell-extension.zip` together with a
-`.sha256` checksum, and verifies that the archive carries `metadata.json`,
-`extension.js`, `prefs.js` and the schema XML at its root and nothing that must
-not ship (README, Makefile, compiled schemas, translations, build directories).
+A versioned run always creates the tag v<x.y.z>; pass `SKIP_CHECK=1` to skip the
+network-dependent lint when offline.
 
 The bundle is produced by `gnome-extensions pack`, so it ships
 `schemas/*.gschema.xml` but not `gschemas.compiled`: the installer (GNOME 44+)
 and extensions.gnome.org compile the schema themselves, and a stale compiled
-copy would shadow later edits to the XML. Upload the bundle at
-<https://extensions.gnome.org/upload/>.
+copy would shadow later edits to the XML. After `pnpm release` (or
+`node scripts/release.mjs <version>`), upload the bundle at
+<https://extensions.gnome.org/upload/> by hand, then push the tag with
+`git push --follow-tags`.
 
-Two things to settle before the first upload. `metadata.json` has no `url` key
-yet, and the uuid is the plain `force-activate`: extensions.gnome.org accepts
-that (it only rejects an illegal character set and `gnome.org` namespaces), but
-its review guidelines recommend `extension-id@namespace` such as
-`force-activate@your-name.github.io`. `./release.sh` warns about both.
+The uuid is namespaced (`force-activate@edwinhuish.github.io`), as
+extensions.gnome.org requires. Keep it aligned with the uuid of your extension
+on extensions.gnome.org, and optionally add a `url` field pointing to the
+source repository.
+
+A `ci.yml` workflow under `.github/workflows/` runs `pnpm lint` and `pnpm test`
+(the `shexli` and bundled checks) on every pull request and on pushes to `main`,
+so format problems are caught before a release is cut.
 
 ## Limitations
 

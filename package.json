@@ -1,0 +1,19 @@
+{
+  "name": "force-activate",
+  "version": "1.0.0",
+  "description": "Brings windows that another application asked for to the foreground, instead of only raising a \"Window is ready\" notification.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "node scripts/lint.mjs",
+    "test": "node scripts/test.mjs",
+    "release": "node scripts/release.mjs",
+    "build": "node scripts/build.mjs",
+    "install:ext": "pnpm build && gnome-extensions install --force build/force-activate@edwinhuish.github.io.shell-extension.zip",
+    "uninstall:ext": "gnome-extensions uninstall force-activate@edwinhuish.github.io || true; rm -rf \"$HOME/.local/share/gnome-shell/extensions/force-activate@edwinhuish.github.io\"",
+    "enable": "gnome-extensions enable force-activate@edwinhuish.github.io",
+    "disable": "gnome-extensions disable force-activate@edwinhuish.github.io",
+    "clean": "node scripts/clean.mjs"
+  },
+  "packageManager": "pnpm@12.4.1"
+}

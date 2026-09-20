@@ -2,6 +2,12 @@
 build/
 *.shell-extension.zip
 
+# shexli linter virtualenv (created by `pnpm lint`)
+.shexli-venv/
+
+# Node / pnpm
+node_modules/
+
 # Compiled GSettings schemas
 gschemas.compiled
 

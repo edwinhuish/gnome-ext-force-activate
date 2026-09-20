@@ -1,0 +1,60 @@
+name: CI
+
+# Validate the extension on every pull request and on pushes to main (release
+# tags are cut locally and uploaded by hand). This gives early feedback before a
+# release is cut, using the same shexli linter extensions.gnome.org applies.
+on:
+  push:
+    branches: [main]
+    tags-ignore: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Install GNOME Shell and gettext
+        run: sudo apt-get update && sudo apt-get install -y gnome-shell gettext libglib2.0-bin
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run schema and metadata checks
+        run: pnpm lint
+
+      - name: Run shexli (extensions.gnome.org) lint
+        run: pnpm test
+
+      - name: Pack extension
+        run: pnpm build
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}
+          path: build/*.shell-extension.zip
+          if-no-files-found: error
+          retention-days: 14
